@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Shooter</title>
+</head>
+<body>
+    <script>
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        document.body.appendChild(canvas);
+        canvas.width = 800;
+        canvas.height = 600;
+
+        let player = { x: 375, y: 550, width: 50, height: 20, speed: 8, bullets: [], lives: 3 };
+        let enemies = [];
+        let enemyBullets = [];
+        let score = 0;
+        let wave = 1; // Indicatore della ondata
+        let keys = {};
+        let enemyShotCooldown = 300;
+        let explosions = []; // Array per gestire le esplosioni
+
+        // Funzione per generare una nuova ondata di nemici
+        function generateEnemies() {
+            enemies = [];
+            for (let i = 0; i < wave; i++) { // Aumenta il numero di nemici con ogni ondata
+                for (let j = 0; j < 10; j++) {
+                    enemies.push({
+                        x: 50 + j * 60,
+                        y: 50 + i * 40,
+                        width: 40,
+                        height: 20,
+                        speed: 1 + wave * 0.1, // Aumenta la velocità dei nemici
+                        shootCooldown: Math.floor(Math.random() * 300) + 200,
+                        lastShotTime: 0
+                    });
+                }
+            }
+        }
+
+        // Funzione per generare un'esplosione
+        function generateExplosion(x, y) {
+            explosions.push({
+                x: x,
+                y: y,
+                radius: 0,
+                maxRadius: 20,
+                alpha: 1
+            });
+        }
+
+        // Gestione input da tastiera
+        document.addEventListener("keydown", (e) => keys[e.key] = true);
+        document.addEventListener("keyup", (e) => keys[e.key] = false);
+        document.addEventListener("keydown", (e) => {
+            if (e.key === " " && player.bullets.length < 3) { // Limita i proiettili a 3
+                player.bullets.push({ x: player.x + player.width / 2 - 2, y: player.y });
+            }
+        });
+
+        // Funzione per aggiornare lo stato del gioco
+        function update() {
+            if (keys["ArrowLeft"] && player.x > 0) player.x -= player.speed;
+            if (keys["ArrowRight"] && player.x < canvas.width - player.width) player.x += player.speed;
+
+            // Aggiornamento dei proiettili del giocatore
+            player.bullets.forEach((bullet, index) => bullet.y -= 8); // Aumenta la velocità del proiettile
+            player.bullets = player.bullets.filter(bullet => bullet.y > 0); // Rimuove i proiettili fuori schermo
+
+            // Aggiornamento dei proiettili degli alieni
+            enemyBullets.forEach(bullet => bullet.y += 3);
+            enemyBullets = enemyBullets.filter(bullet => bullet.y < canvas.height); // Rimuove i proiettili fuori schermo
+
+            // Movimento degli alieni
+            enemies.forEach(enemy => enemy.x += enemy.speed);
+            enemies.forEach(enemy => {
+                if (enemy.x > canvas.width - enemy.width || enemy.x < 0) {
+                    enemy.speed *= -1;
+                    enemy.y += 20;
+                }
+            });
+
+            // Sparo degli alieni con un ritardo maggiore
+            enemies.forEach(enemy => {
+                if (enemy.lastShotTime <= 0) {
+                    enemyBullets.push({ x: enemy.x + enemy.width / 2 - 2, y: enemy.y + enemy.height });
+                    enemy.lastShotTime = Math.floor(Math.random() * 300) + 200;  // Imposta il cooldown aumentato
+                } else {
+                    enemy.lastShotTime--; // Riduce il cooldown per il prossimo colpo
+                }
+            });
+
+            // Controllo collisioni tra proiettili del giocatore e nemici
+            player.bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (bullet.x < enemy.x + enemy.width && bullet.x + 5 > enemy.x &&
+                        bullet.y < enemy.y + enemy.height && bullet.y + 10 > enemy.y) {
+                        player.bullets.splice(bulletIndex, 1);
+                        enemies.splice(enemyIndex, 1);
+                        score += 10; // Aumenta il punteggio
+                        generateExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2); // Esplosione
+                    }
+                });
+            });
+
+            // Controllo collisioni tra proiettili degli alieni e il giocatore
+            enemyBullets.forEach((bullet, bulletIndex) => {
+                if (bullet.x < player.x + player.width && bullet.x + 5 > player.x &&
+                    bullet.y < player.y + player.height && bullet.y + 10 > player.y) {
+                    enemyBullets.splice(bulletIndex, 1);
+                    player.lives -= 1; // Perdi una vita
+                    if (player.lives <= 0) {
+                        alert("Game Over! Punteggio finale: " + score);
+                        resetGame(); // Reset del gioco
+                    }
+                }
+            });
+
+            // Se tutti i nemici sono stati eliminati, crea una nuova ondata
+            if (enemies.length === 0) {
+                wave++;
+                generateEnemies();
+            }
+
+            // Aggiorna esplosioni
+            explosions.forEach(explosion => {
+                explosion.radius += 2;
+                explosion.alpha -= 0.1;
+            });
+            explosions = explosions.filter(explosion => explosion.alpha > 0); // Rimuove esplosioni finite
+        }
+
+        // Funzione per disegnare gli oggetti sullo schermo
+        function draw() {
+            ctx.fillStyle = "black"; // Cambiamo lo sfondo in nero
+            ctx.fillRect(0, 0, canvas.width, canvas.height); // Disegna lo sfondo
+
+            // Disegna il giocatore
+            ctx.fillStyle = "blue";  // Colore blu per la nave del giocatore
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Disegna i proiettili del giocatore
+            player.bullets.forEach(bullet => {
+                ctx.fillStyle = "white";
+                ctx.fillRect(bullet.x, bullet.y, 5, 10);
+            });
+
+            // Disegna i proiettili degli alieni
+            enemyBullets.forEach(bullet => {
+                ctx.fillStyle = "red";
+                ctx.fillRect(bullet.x, bullet.y, 5, 10);
+            });
+
+            // Disegna gli alieni
+            ctx.fillStyle = "green";
+            enemies.forEach(enemy => {
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            });
+
+            // Disegna il punteggio
+            ctx.fillStyle = "white";
+            ctx.font = "20px Arial";
+            ctx.fillText("Punteggio: " + score, 10, 30);
+
+            // Disegna le vite
+            ctx.fillText("Vite: " + player.lives, canvas.width - 100, 30);
+
+            // Disegna l'indicatore dell'onda
+            ctx.fillText("Ondata: " + wave, canvas.width / 2 - 50, 30);
+
+            // Disegna le esplosioni
+            explosions.forEach(explosion => {
+                ctx.fillStyle = "yellow";
+                ctx.globalAlpha = explosion.alpha;
+                ctx.beginPath();
+                ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1; // Resetta l'alpha
+            });
+        }
+
+        // Funzione per gestire il ciclo di gioco
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Funzione per resettare il gioco
+        function resetGame() {
+            player.x = 375;
+            player.y = 550;
+            player.lives = 3;
+            score = 0;
+            wave = 1; // Reset dell'onda
+            generateEnemies();
+        }
+
+        // Inizializzazione del gioco
+        generateEnemies();
+        gameLoop();
+    </script>
+</body>
+</html>
